@@ -98,12 +98,12 @@ async def handle_application(interaction, user, role_name, role_id):
         await log_channel.send(embed=embed)
 
 # =========================
-# Slash Command /WMI-register
+# Slash Command: /wmi_register
 # =========================
 
-@tree.command(name="WMI-register", description="Start the WMI Registration process")
+@tree.command(name="wmi_register", description="Start the WMI Registration process")
 @app_commands.checks.has_permissions(administrator=True)
-async def register_command(interaction: discord.Interaction):
+async def wmi_register(interaction: discord.Interaction):
     if interaction.guild.id != SWM_GUILD_ID:
         await interaction.response.send_message("❌ This command is only allowed in SWM.", ephemeral=True)
         return
