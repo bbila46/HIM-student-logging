@@ -6,7 +6,6 @@ import datetime
 import asyncio
 from aiohttp import web
 
-# Setup intents
 intents = discord.Intents.default()
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -18,19 +17,16 @@ LOG_CHANNEL_ID = 1392655742430871754
 GUILD_ID = 1387102987238768783
 INVITE_LINK = "https://discord.gg/66qx29Tf"
 
-# Temporary storage for role assignments (user_id -> role_id)
 pending_roles = {}
 
-# ---- Modal ----
+# Modal
 class RegistrationModal(discord.ui.Modal, title="🏫 WMI Registration"):
-
     username = discord.ui.TextInput(
         label="Your Full Name",
         placeholder="e.g. Dr. Elira Q.",
         required=True,
         style=discord.TextStyle.short
     )
-
     notes = discord.ui.TextInput(
         label="Optional Notes",
         placeholder="Anything you'd like to add...",
@@ -42,7 +38,7 @@ class RegistrationModal(discord.ui.Modal, title="🏫 WMI Registration"):
         embed = discord.Embed(
             title="Wisteria Medical Institute Registration",
             description="Choose your role below to complete registration:",
-            color=0xD8BFD8  # Light purple
+            color=0xD8BFD8
         )
         embed.add_field(name="Full Name", value=self.username.value, inline=True)
         embed.add_field(name="Discord", value=interaction.user.mention, inline=True)
@@ -57,7 +53,7 @@ class RegistrationModal(discord.ui.Modal, title="🏫 WMI Registration"):
         )
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-# ---- Role Selector ----
+# Role Selection
 class RoleSelectionView(discord.ui.View):
     def __init__(self, full_name, discord_user, notes):
         super().__init__(timeout=120)
@@ -77,28 +73,23 @@ class RoleSelectionView(discord.ui.View):
         guild = interaction.guild
         member = guild.get_member(self.discord_user.id)
 
-        # Save the chosen role for later (when they join the main server)
         pending_roles[self.discord_user.id] = role_id
-
         assigned_now = False
+
         if member and member.guild.id == GUILD_ID:
             role = member.guild.get_role(role_id)
             if role:
                 await member.add_roles(role)
                 assigned_now = True
 
-        message = (
+        msg = (
             f"✅ You are now registered as **{role_label}**.\n"
-            f"📨 Please click [this link]({INVITE_LINK}) to join the **main WMI server**.\n"
+            f"📨 Please [join our server]({INVITE_LINK}).\n"
         )
-        if assigned_now:
-            message += "🎉 Your role was automatically assigned!"
-        else:
-            message += "🕓 Your role will be assigned once you join."
+        msg += "🎉 Your role was assigned!" if assigned_now else "🕓 It will be assigned when you join."
 
-        await interaction.response.send_message(message, ephemeral=True)
+        await interaction.response.send_message(msg, ephemeral=True)
 
-        # Log to the log channel
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
             log_embed = discord.Embed(
@@ -111,17 +102,17 @@ class RoleSelectionView(discord.ui.View):
             log_embed.add_field(name="Role Chosen", value=role_label, inline=True)
             if self.notes:
                 log_embed.add_field(name="Notes", value=self.notes, inline=False)
-            log_embed.set_footer(text=f"Registered on {discord.utils.format_dt(discord.utils.utcnow(), style='F')}")
+            log_embed.set_footer(text="WMI AutoLogger")
             await log_channel.send(embed=log_embed)
 
         self.stop()
 
-# ---- Slash Command ----
+# Slash Command
 @bot.tree.command(name="wmi_register", description="Register for Wisteria Medical Institute")
 async def wmi_register(interaction: discord.Interaction):
     await interaction.response.send_modal(RegistrationModal())
 
-# ---- Auto Role on Join ----
+# Auto role assign on join
 @bot.event
 async def on_member_join(member):
     if member.guild.id != GUILD_ID:
@@ -134,30 +125,26 @@ async def on_member_join(member):
     role = member.guild.get_role(role_id)
     if role:
         await member.add_roles(role)
-        print(f"✅ Assigned {role.name} to {member.name} in main server")
-
-        # Notify in log channel
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
             await log_channel.send(
-                f"🎓 {member.mention} has joined and was assigned the role **{role.name}** automatically."
+                f"🎓 {member.mention} has joined and was given **{role.name}** automatically!"
             )
+        del pending_roles[member.id]
 
-    del pending_roles[member.id]
-
-# ---- On Ready ----
+# On Ready
 @bot.event
 async def on_ready():
     try:
         await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-        print(f"✅ Synced slash commands to WMI Guild ({GUILD_ID})")
+        print(f"✅ Synced slash commands to server {GUILD_ID}")
     except Exception as e:
-        print("❌ Error syncing:", e)
+        print("❌ Error syncing commands:", e)
     print(f"🟣 Logged in as {bot.user}")
 
-# ---- Render Web Server Port ----
+# Web server for health check
 async def handle(request):
-    return web.Response(text="WMI Registration Bot is running!")
+    return web.Response(text="WMI Bot is running.")
 
 async def start_webserver():
     app = web.Application()
@@ -167,9 +154,9 @@ async def start_webserver():
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    print(f"🌐 Web server listening on port {port}")
+    print(f"🌐 Health check web server on port {port}")
 
-# ---- Launch ----
+# Main entry
 async def main():
     await bot.login(os.getenv("DISCORD_TOKEN"))
     await start_webserver()
@@ -179,4 +166,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("🔻 Bot stopped")
+        print("🔻 Bot stopped.")
