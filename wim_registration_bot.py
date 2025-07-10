@@ -8,7 +8,7 @@ import datetime
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# Load environment variables
+# Load .env
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
@@ -21,12 +21,12 @@ PROFESSOR_ROLE_ID = 1392654292648722494
 
 intents = discord.Intents.default()
 intents.members = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+
+# Use slash commands only (no ! prefix)
+bot = commands.Bot(command_prefix=commands.when_mentioned, intents=intents)
 tree = bot.tree
 
-# =========================
-# View & Button Classes
-# =========================
+# ========== Buttons ==========
 
 class RoleSelectView(View):
     def __init__(self, user):
@@ -51,9 +51,7 @@ class ProfessorButton(Button):
     async def callback(self, interaction: discord.Interaction):
         await handle_application(interaction, self.user, "Professor", PROFESSOR_ROLE_ID)
 
-# =========================
-# Handle Application Logic
-# =========================
+# ========== Handle Registration ==========
 
 async def handle_application(interaction, user, role_name, role_id):
     guild = interaction.guild
@@ -83,7 +81,7 @@ async def handle_application(interaction, user, role_name, role_id):
 
     await interaction.response.send_message(f"✅ Registered as **{role_name}**! Check DMs.", ephemeral=True)
 
-    # Log
+    # Logging
     log_channel = bot.get_channel(LOG_CHANNEL_ID)
     if log_channel:
         embed = discord.Embed(
@@ -97,9 +95,7 @@ async def handle_application(interaction, user, role_name, role_id):
         embed.add_field(name="Date", value=str(datetime.datetime.utcnow().date()), inline=True)
         await log_channel.send(embed=embed)
 
-# =========================
-# Slash Command: /wmi_register
-# =========================
+# ========== /wmi_register Slash Command ==========
 
 @tree.command(name="wmi_register", description="Start the WMI Registration process")
 @app_commands.checks.has_permissions(administrator=True)
@@ -124,9 +120,7 @@ async def wmi_register(interaction: discord.Interaction):
     view = RoleSelectView(user)
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-# =========================
-# Sync + Ready
-# =========================
+# ========== Bot Ready ==========
 
 @bot.event
 async def on_ready():
@@ -137,9 +131,7 @@ async def on_ready():
         print(f"❌ Failed to sync commands: {e}")
     print(f"✅ Bot is online as {bot.user}")
 
-# =========================
-# Web Server for Render
-# =========================
+# ========== Web Server for Render ==========
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -153,8 +145,6 @@ def run_webserver():
 
 threading.Thread(target=run_webserver, daemon=True).start()
 
-# =========================
-# Run Bot
-# =========================
+# ========== Run Bot ==========
 
 bot.run(TOKEN)
