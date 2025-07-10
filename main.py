@@ -18,6 +18,9 @@ LOG_CHANNEL_ID = 1392655742430871754
 GUILD_ID = 1387102987238768783
 INVITE_LINK = "https://discord.gg/66qx29Tf"
 
+# Temporary storage for role assignments (user_id -> role_id)
+pending_roles = {}
+
 # ---- Modal ----
 class RegistrationModal(discord.ui.Modal, title="🏫 WMI Registration"):
 
@@ -74,19 +77,28 @@ class RoleSelectionView(discord.ui.View):
         guild = interaction.guild
         member = guild.get_member(self.discord_user.id)
 
-        if not member:
-            await interaction.response.send_message("⚠️ Member not found in this server.", ephemeral=True)
-            return
+        # Save the chosen role for later (when they join the main server)
+        pending_roles[self.discord_user.id] = role_id
 
-        role = guild.get_role(role_id)
-        if role:
-            await member.add_roles(role)
+        assigned_now = False
+        if member and member.guild.id == GUILD_ID:
+            role = member.guild.get_role(role_id)
+            if role:
+                await member.add_roles(role)
+                assigned_now = True
 
-        await interaction.response.send_message(
-            f"✅ You are now registered as **{role_label}**.\n📨 Join our main server: {INVITE_LINK}",
-            ephemeral=True
+        message = (
+            f"✅ You are now registered as **{role_label}**.\n"
+            f"📨 Please click [this link]({INVITE_LINK}) to join the **main WMI server**.\n"
         )
+        if assigned_now:
+            message += "🎉 Your role was automatically assigned!"
+        else:
+            message += "🕓 Your role will be assigned once you join."
 
+        await interaction.response.send_message(message, ephemeral=True)
+
+        # Log to the log channel
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
             log_embed = discord.Embed(
@@ -96,7 +108,7 @@ class RoleSelectionView(discord.ui.View):
             )
             log_embed.add_field(name="Full Name", value=self.full_name, inline=True)
             log_embed.add_field(name="Discord", value=self.discord_user.mention, inline=True)
-            log_embed.add_field(name="Role", value=role_label, inline=True)
+            log_embed.add_field(name="Role Chosen", value=role_label, inline=True)
             if self.notes:
                 log_embed.add_field(name="Notes", value=self.notes, inline=False)
             log_embed.set_footer(text=f"Registered on {discord.utils.format_dt(discord.utils.utcnow(), style='F')}")
@@ -109,13 +121,38 @@ class RoleSelectionView(discord.ui.View):
 async def wmi_register(interaction: discord.Interaction):
     await interaction.response.send_modal(RegistrationModal())
 
+# ---- Auto Role on Join ----
+@bot.event
+async def on_member_join(member):
+    if member.guild.id != GUILD_ID:
+        return
+
+    role_id = pending_roles.get(member.id)
+    if not role_id:
+        return
+
+    role = member.guild.get_role(role_id)
+    if role:
+        await member.add_roles(role)
+        print(f"✅ Assigned {role.name} to {member.name} in main server")
+
+        # Notify in log channel
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        if log_channel:
+            await log_channel.send(
+                f"🎓 {member.mention} has joined and was assigned the role **{role.name}** automatically."
+            )
+
+    del pending_roles[member.id]
+
+# ---- On Ready ----
 @bot.event
 async def on_ready():
     try:
-        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))  # Sync to your server
+        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
         print(f"✅ Synced slash commands to WMI Guild ({GUILD_ID})")
     except Exception as e:
-        print("Error syncing:", e)
+        print("❌ Error syncing:", e)
     print(f"🟣 Logged in as {bot.user}")
 
 # ---- Render Web Server Port ----
