@@ -2,52 +2,58 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import os
+import datetime
 import asyncio
 from aiohttp import web
 
-# Setup intents
+# Bot setup
 intents = discord.Intents.default()
 intents.members = True
-
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Configuration constants
+# Constants
 ROLE_STUDENT = 1392653369964757154
 LOG_CHANNEL_ID = 1392655742430871754
 GUILD_ID = 1387102987238768783
 INVITE_LINK = "https://discord.gg/66qx29Tf"
 
-# Store roles for users who haven't joined yet
+# Store users who haven't joined yet
 pending_roles = {}
 
-# Modal UI for registration
+# ------------------- MODAL FORM ------------------- #
 class RegistrationModal(discord.ui.Modal, title="🌸 WMI Registration - Step 1"):
+
     username = discord.ui.TextInput(
         label="Your Full Name",
         placeholder="e.g. Elira Q.",
-        required=True
+        required=True,
+        style=discord.TextStyle.short
     )
+
     email = discord.ui.TextInput(
         label="Email Address (optional)",
         placeholder="e.g. elira@example.com",
-        required=False
+        required=False,
+        style=discord.TextStyle.short
     )
+
     notes = discord.ui.TextInput(
         label="Optional Notes",
         placeholder="Anything you’d like to share with us?",
-        style=discord.TextStyle.paragraph,
-        required=False
+        required=False,
+        style=discord.TextStyle.paragraph
     )
 
     async def on_submit(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="🌸 Wisteria Medical Institute Registration",
             description="Please choose your role below to complete your registration.",
-            color=0xD8BFD8
+            color=0xD8BFD8  # Wisteria / light purple
         )
         embed.add_field(name="Full Name", value=self.username.value, inline=True)
         embed.add_field(name="Discord", value=interaction.user.mention, inline=True)
         embed.add_field(name="Date", value=discord.utils.format_dt(discord.utils.utcnow(), style='F'), inline=False)
+
         if self.email.value:
             embed.add_field(name="Email", value=self.email.value, inline=True)
         if self.notes.value:
@@ -61,7 +67,7 @@ class RegistrationModal(discord.ui.Modal, title="🌸 WMI Registration - Step 1"
         )
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-# Role selection view
+# ------------------- ROLE SELECTION ------------------- #
 class RoleSelectionView(discord.ui.View):
     def __init__(self, full_name, email, discord_user, notes):
         super().__init__(timeout=120)
@@ -75,6 +81,7 @@ class RoleSelectionView(discord.ui.View):
         guild = interaction.guild
         member = guild.get_member(self.discord_user.id)
 
+        # Save pending role if member not in guild yet
         pending_roles[self.discord_user.id] = ROLE_STUDENT
         assigned_now = False
 
@@ -92,6 +99,7 @@ class RoleSelectionView(discord.ui.View):
 
         await interaction.response.send_message(msg, ephemeral=True)
 
+        # Log the registration
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
             log_embed = discord.Embed(
@@ -111,12 +119,12 @@ class RoleSelectionView(discord.ui.View):
 
         self.stop()
 
-# Slash command
+# ------------------- SLASH COMMAND ------------------- #
 @bot.tree.command(name="wmi_register", description="Start the WMI student registration process.")
 async def wmi_register(interaction: discord.Interaction):
     await interaction.response.send_modal(RegistrationModal())
 
-# Auto-assign pending role if member joins later
+# ------------------- MEMBER JOIN DETECTOR ------------------- #
 @bot.event
 async def on_member_join(member):
     if member.guild.id != GUILD_ID:
@@ -134,17 +142,17 @@ async def on_member_join(member):
             await log_channel.send(f"🎓 {member.mention} has joined and was auto-assigned the **MS1** role.")
         del pending_roles[member.id]
 
-# Slash command sync on ready
+# ------------------- STARTUP SYNC & HEALTH ------------------- #
 @bot.event
 async def on_ready():
     try:
-        synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-        print(f"✅ Synced {len(synced)} slash command(s) to server {GUILD_ID}")
+        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+        print(f"✅ Synced commands to guild {GUILD_ID}")
     except Exception as e:
         print("❌ Sync failed:", e)
     print(f"🟣 Logged in as {bot.user}")
 
-# Web server for uptime
+# Web server for Koyeb/Render health check
 async def handle(request):
     return web.Response(text="WMI Bot is alive!")
 
@@ -156,9 +164,9 @@ async def start_webserver():
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    print(f"🌐 Health check server running on port {port}")
+    print(f"🌐 Web server running on port {port}")
 
-# Main function to launch the bot
+# ------------------- MAIN ENTRY ------------------- #
 async def main():
     await bot.login(os.getenv("DISCORD_TOKEN"))
     await start_webserver()
