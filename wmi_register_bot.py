@@ -5,42 +5,45 @@ import os
 import asyncio
 from aiohttp import web
 
+# Setup intents
 intents = discord.Intents.default()
 intents.members = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# Configuration constants
 ROLE_STUDENT = 1392653369964757154
 LOG_CHANNEL_ID = 1392655742430871754
 GUILD_ID = 1387102987238768783
 INVITE_LINK = "https://discord.gg/66qx29Tf"
 
+# Store roles for users who haven't joined yet
 pending_roles = {}
 
+# Modal UI for registration
 class RegistrationModal(discord.ui.Modal, title="🌸 WMI Registration - Step 1"):
     username = discord.ui.TextInput(
         label="Your Full Name",
         placeholder="e.g. Elira Q.",
-        required=True,
-        style=discord.TextStyle.short
+        required=True
     )
     email = discord.ui.TextInput(
         label="Email Address (optional)",
         placeholder="e.g. elira@example.com",
-        required=False,
-        style=discord.TextStyle.short
+        required=False
     )
     notes = discord.ui.TextInput(
         label="Optional Notes",
         placeholder="Anything you’d like to share with us?",
-        required=False,
-        style=discord.TextStyle.paragraph
+        style=discord.TextStyle.paragraph,
+        required=False
     )
 
     async def on_submit(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="🌸 Wisteria Medical Institute Registration",
             description="Please choose your role below to complete your registration.",
-            color=0xD8BFD8  # Light purple
+            color=0xD8BFD8
         )
         embed.add_field(name="Full Name", value=self.username.value, inline=True)
         embed.add_field(name="Discord", value=interaction.user.mention, inline=True)
@@ -58,6 +61,7 @@ class RegistrationModal(discord.ui.Modal, title="🌸 WMI Registration - Step 1"
         )
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
+# Role selection view
 class RoleSelectionView(discord.ui.View):
     def __init__(self, full_name, email, discord_user, notes):
         super().__init__(timeout=120)
@@ -107,10 +111,12 @@ class RoleSelectionView(discord.ui.View):
 
         self.stop()
 
+# Slash command
 @bot.tree.command(name="wmi_register", description="Start the WMI student registration process.")
 async def wmi_register(interaction: discord.Interaction):
     await interaction.response.send_modal(RegistrationModal())
 
+# Auto-assign pending role if member joins later
 @bot.event
 async def on_member_join(member):
     if member.guild.id != GUILD_ID:
@@ -128,15 +134,17 @@ async def on_member_join(member):
             await log_channel.send(f"🎓 {member.mention} has joined and was auto-assigned the **MS1** role.")
         del pending_roles[member.id]
 
+# Slash command sync on ready
 @bot.event
 async def on_ready():
     try:
-        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-        print(f"✅ Synced commands to guild {GUILD_ID}")
+        synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+        print(f"✅ Synced {len(synced)} slash command(s) to server {GUILD_ID}")
     except Exception as e:
         print("❌ Sync failed:", e)
     print(f"🟣 Logged in as {bot.user}")
 
+# Web server for uptime
 async def handle(request):
     return web.Response(text="WMI Bot is alive!")
 
@@ -148,8 +156,9 @@ async def start_webserver():
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    print(f"🌐 Web server running on port {port}")
+    print(f"🌐 Health check server running on port {port}")
 
+# Main function to launch the bot
 async def main():
     await bot.login(os.getenv("DISCORD_TOKEN"))
     await start_webserver()
